@@ -494,7 +494,7 @@ try {
     Output-IDsAndSecret -tenantId $tenantId -appId $appId -clientSecret $clientSecret -domain $domain
 }
 catch {
-    Write-Host "An error occurred: $_"
-    Write-Host "Please Contact Firefly Support."
+    Write-Host "An error occurred: $_"  -ForegroundColor Red
+    Write-Host "Please Contact Firefly Support."  -ForegroundColor Red
     Read-Host "Press Enter to continue..."
 }
