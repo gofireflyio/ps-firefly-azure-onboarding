@@ -143,7 +143,7 @@ function New-AppRoleAssignments {
         Write-Host "Done verifying assigning $role role to registration application..."
     }
 
-    $ffRoleName = 'Firefly'+$subscriptionId
+    $ffRoleName = 'Firefly-'+$subscriptionId
     New-FireflyCustomRole -ffRoleName $ffRoleName -subscriptionId $subscriptionId
     $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $ffRoleName
     if ($existing) {
