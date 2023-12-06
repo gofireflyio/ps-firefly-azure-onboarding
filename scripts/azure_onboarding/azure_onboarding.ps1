@@ -121,7 +121,8 @@ function Add-AppPermissions {
 
 function New-AppRoleAssignments {
     param (
-        [string][ValidateNotNullOrEmpty()]$spId
+        [string][ValidateNotNullOrEmpty()]$spId,
+        [string][ValidateNotNullOrEmpty()]$subscriptionId
     )
     Write-Host "Start assigning roles to registration application..."
     $roles = @('Reader', 'Security Reader', 'Billing Reader')
@@ -143,7 +144,7 @@ function New-AppRoleAssignments {
     }
 
     $ffRoleName = 'Firefly'
-    New-FireflyCustomRole -ffRoleName $ffRoleName
+    New-FireflyCustomRole -ffRoleName $ffRoleName -subscriptionId $subscriptionId
     $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $ffRoleName
     if ($existing) {
         Write-Host "Role assignment for $ffRoleName already exist, skipping creation..."
@@ -170,7 +171,8 @@ function New-AppRoleAssignments {
 
 function New-FireflyCustomRole {
     param (
-        [string][ValidateNotNullOrEmpty()]$ffRoleName
+        [string][ValidateNotNullOrEmpty()]$ffRoleName,
+        [string][ValidateNotNullOrEmpty()]$subscriptionId
     )
     $existing = Get-AzRoleDefinition -Name $ffRoleName -ErrorAction SilentlyContinue
     if ($existing) {
@@ -191,7 +193,7 @@ function New-FireflyCustomRole {
                     "Microsoft.Web/sites/config/list/Action",
                     "Microsoft.Cache/redis/listKeys/action"
     $role.DataActions = "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
-    $role.AssignableScopes = '/subscriptions/c3a595ae-1fb9-49e4-8c5e-31cd77f728b1'
+    $role.AssignableScopes = '/subscriptions/'+$subscriptionId
     New-AzRoleDefinition -Role $role
 
     # Verify the role definition creation
@@ -481,7 +483,7 @@ try {
     $spId = $sp.Id
 
     Add-AppPermissions -app $appName
-    New-AppRoleAssignments -spId $spId
+    New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId
 
     $domain = Get-DomainName
 
