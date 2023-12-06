@@ -181,7 +181,7 @@ function New-FireflyCustomRole {
     Write-Host "Start Creating $ffRoleName custom role definition..."
     $role = [Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition]::new()
     $role.Name = $ffRoleName
-    $role.Description = 'Can monitor and restart virtual machines.'
+    $role.Description = 'Firefly custom role definition.'
     $role.IsCustom = $true
     $role.Actions =  "Microsoft.Storage/storageAccounts/listkeys/action",
                     "Microsoft.DocumentDB/databaseAccounts/listConnectionStrings/action",
