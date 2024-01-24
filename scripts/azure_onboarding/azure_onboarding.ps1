@@ -28,6 +28,38 @@ function Set-EventDrivenParameter {
     return $false
 }
 
+function Set-ADAppPermsissionParameter {
+    param (
+        $enableAcitveDirectory
+    )
+    if ($null -eq $enableAcitveDirectory) {
+        Write-Host "Working on an Active Directory Enabled integration as default..."
+        return $true
+    }
+    if ($enableAcitveDirectory -is [bool] -and $enableAcitveDirectory) {
+        Write-Host "Working on an Active Directory Enabled integration..."
+        return $true
+    }
+    Write-Host "Working on an Active Directory Disabled integration..."
+    return $false
+}
+
+function Get-BuiltInRolePermisions {
+    param (
+        $enableCostOptimization
+    )
+
+    roles = @('Reader', 'Security Reader')
+    if ($null -eq $enableAcitveDirectory) {
+        roles += 'Billing Reader'
+    }
+    if ($enableCostOptimization -is [bool] -and $enableCostOptimization) {
+        roles += 'Billing Reader'
+    }
+
+    return roles
+}
+
 function Set-AppNameParameter {
     param (
         [string]$appName,
@@ -122,10 +154,11 @@ function Add-AppPermissions {
 function New-AppRoleAssignments {
     param (
         [string][ValidateNotNullOrEmpty()]$spId,
-        [string][ValidateNotNullOrEmpty()]$subscriptionId
+        [string][ValidateNotNullOrEmpty()]$subscriptionId,
+        [bool]$enableCostOptimization
     )
     Write-Host "Start assigning roles to registration application..."
-    $roles = @('Reader', 'Security Reader', 'Billing Reader')
+    $roles = Get-BuiltInRolePermisions -enableCostOptimization $enableCostOptimization
     foreach ($role in $roles) {
         $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $role
         if ($existing) {
@@ -483,7 +516,7 @@ try {
     $spId = $sp.Id
 
     Add-AppPermissions -app $appName
-    New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId
+    New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId -enableCostOptimization $enableCostOptimization
 
     $domain = Get-DomainName
 
