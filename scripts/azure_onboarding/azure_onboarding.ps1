@@ -49,12 +49,18 @@ function Get-BuiltInRolePermisions {
         $enableCostOptimization
     )
 
-    $roles = @('Reader', 'Security Reader')
+    $roles = @('Reader')
     if ($null -eq $enableAcitveDirectory) {
         $roles += 'Billing Reader'
     }
     if ($enableCostOptimization -is [bool] -and $enableCostOptimization) {
         $roles += 'Billing Reader'
+    }
+    if ($null -eq $enableSecurityCenterResources) {
+        $roles += 'Security Reader'
+    }
+    if ($enableSecurityCenterResources -is [bool] -and $enableSecurityCenterResources) {
+        $roles += 'Security Reader'
     }
 
     return $roles
