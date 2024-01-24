@@ -49,15 +49,15 @@ function Get-BuiltInRolePermisions {
         $enableCostOptimization
     )
 
-    roles = @('Reader', 'Security Reader')
+    $roles = @('Reader', 'Security Reader')
     if ($null -eq $enableAcitveDirectory) {
-        roles += 'Billing Reader'
+        $roles += 'Billing Reader'
     }
     if ($enableCostOptimization -is [bool] -and $enableCostOptimization) {
-        roles += 'Billing Reader'
+        $roles += 'Billing Reader'
     }
 
-    return roles
+    return $roles
 }
 
 function Set-AppNameParameter {
