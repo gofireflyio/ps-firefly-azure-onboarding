@@ -515,7 +515,11 @@ try {
     $appId = $sp.AppId
     $spId = $sp.Id
 
-    Add-AppPermissions -app $appName
+    $enableAcitveDirectory = Set-ADAppPermsissionParameter -enableAcitveDirectory $enableAcitveDirectory
+    if ($enableAcitveDirectory) {
+        Add-AppPermissions -app $appName
+    }
+
     New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId -enableCostOptimization $enableCostOptimization
 
     $domain = Get-DomainName
