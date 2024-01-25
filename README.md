@@ -3,12 +3,16 @@ Powershell script for onboarding Azure into Firefly
 
 The script creates the application registration and service principal needed for firefly to scan the cloud.
 
-The application registration itself is given the standard `Directory.Read.All` permission
+The application registration itself is given the standard `Directory.Read.All` permission to fetch AD resources.
+To opt-out set `$enableAcitveDirectory=false`
 
 The service principal is given the standard roles:
-- `Reader`
-- `Security Reader`
-- `Billing Reader`
+- `Reader` to fetch Azurerm resources
+- `Security Reader` to fetch Azure Security Center resources
+- `Billing Reader` to provide cost optimization recommendations
+To opt-out of cost optimization set `$enableCostOptimization=false`
+To opt-out of  azure Security Center resources set `$enableSecurityCenterResources=false`
+
 
 Also, a custom role with the following permissions is attached:
 - `Microsoft.Storage/storageAccounts/listkeys/action`
