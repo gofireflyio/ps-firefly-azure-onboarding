@@ -46,7 +46,8 @@ function Set-ADAppPermsissionParameter {
 
 function Get-BuiltInRolePermisions {
     param (
-        $enableCostOptimization
+        $enableCostOptimization,
+        $enableSecurityCenterResources
     )
 
     $roles = @('Reader')
@@ -161,10 +162,11 @@ function New-AppRoleAssignments {
     param (
         [string][ValidateNotNullOrEmpty()]$spId,
         [string][ValidateNotNullOrEmpty()]$subscriptionId,
-        [bool]$enableCostOptimization
+        [bool]$enableCostOptimization,
+        [bool]$enableSecurityCenterResources
     )
     Write-Host "Start assigning roles to registration application..."
-    $roles = Get-BuiltInRolePermisions -enableCostOptimization $enableCostOptimization
+    $roles = Get-BuiltInRolePermisions -enableCostOptimization $enableCostOptimization -enableSecurityCenterResources $enableSecurityCenterResources
     foreach ($role in $roles) {
         $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $role
         if ($existing) {
@@ -526,7 +528,7 @@ try {
         Add-AppPermissions -app $appName
     }
 
-    New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId -enableCostOptimization $enableCostOptimization
+    New-AppRoleAssignments -spId $spId -subscriptionId $subscriptionId -enableCostOptimization $enableCostOptimization -enableSecurityCenterResources $enableSecurityCenterResources
 
     $domain = Get-DomainName
 
