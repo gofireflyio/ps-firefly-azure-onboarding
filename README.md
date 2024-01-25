@@ -11,7 +11,7 @@ The service principal is given the standard roles:
 - `Security Reader` to fetch Azure Security Center resources
 - `Billing Reader` to provide cost optimization recommendations
 To opt-out of cost optimization set `$enableCostOptimization=false`
-To opt-out of  zzure Security Center resources set `$enableSecurityCenterResources=false`
+To opt-out of  azure Security Center resources set `$enableSecurityCenterResources=false`
 
 
 Also, a custom role with the following permissions is attached:
