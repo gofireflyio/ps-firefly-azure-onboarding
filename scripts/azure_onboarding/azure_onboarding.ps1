@@ -162,8 +162,8 @@ function New-AppRoleAssignments {
     param (
         [string][ValidateNotNullOrEmpty()]$spId,
         [string][ValidateNotNullOrEmpty()]$subscriptionId,
-        [bool]$enableCostOptimization,
-        [bool]$enableSecurityCenterResources
+        $enableCostOptimization,
+        $enableSecurityCenterResources
     )
     Write-Host "Start assigning roles to registration application..."
     $roles = Get-BuiltInRolePermisions -enableCostOptimization $enableCostOptimization -enableSecurityCenterResources $enableSecurityCenterResources
