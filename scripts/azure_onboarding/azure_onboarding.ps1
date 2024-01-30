@@ -202,7 +202,7 @@ function New-AppRoleAssignments {
         )
         OR
         (
-         @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*tfstateenv:*'
+         @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*.tfstateenv:*'
         )
        )"
     # Verify the role assignment creation
