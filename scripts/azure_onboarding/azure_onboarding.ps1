@@ -327,6 +327,7 @@ function New-FireflyStorageAccount {
     $existingStorageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $name -ErrorAction SilentlyContinue
     if (-Not $existingStorageAccount) {
         # Create new storage account
+        Register-AzResourceProvider -ProviderNamespace Microsoft.Storage
         $sa = New-AzStorageAccount -ResourceGroupName $resourceGroup -Name $name -Location $location -SkuName Standard_LRS
         if (!$sa) {
             throw "Error creating $name storage account in $resourceGroup resource group, aborting now."
