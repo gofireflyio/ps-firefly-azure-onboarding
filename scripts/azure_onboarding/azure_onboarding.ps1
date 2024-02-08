@@ -30,13 +30,13 @@ function Set-EventDrivenParameter {
 
 function Set-ADAppPermsissionParameter {
     param (
-        $enableAcitveDirectory
+        $enableActiveDirectory
     )
-    if ($null -eq $enableAcitveDirectory) {
+    if ($null -eq $enableActiveDirectory) {
         Write-Host "Working on an Active Directory Enabled integration as default..."
         return $true
     }
-    if ($enableAcitveDirectory -is [bool] -and $enableAcitveDirectory) {
+    if ($enableActiveDirectory -is [bool] -and $enableActiveDirectory) {
         Write-Host "Working on an Active Directory Enabled integration..."
         return $true
     }
@@ -51,7 +51,7 @@ function Get-BuiltInRolePermisions {
     )
 
     $roles = @('Reader')
-    if ($null -eq $enableAcitveDirectory) {
+    if ($null -eq $enableActiveDirectory) {
         $roles += 'Billing Reader'
     }
     if ($enableCostOptimization -is [bool] -and $enableCostOptimization) {
@@ -178,7 +178,7 @@ function New-AppRoleAssignments {
         New-AzRoleAssignment -PrincipalId $spId -RoleDefinitionName $role
         # Verify the role assignment creation
         $ra = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $role
-        if (!$ra) {
+        if (!$ra -Or $ra.ObjectType -eq "Unknown") {
             throw "Failed to find created role assignment: $role, aborting now."
         }
         Write-Host "Done verifying assigning $role role to registration application..."
@@ -188,6 +188,9 @@ function New-AppRoleAssignments {
     New-FireflyCustomRole -ffRoleName $ffRoleName -subscriptionId $subscriptionId
     $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $ffRoleName
     if ($existing) {
+        if ($existing.ObjectType -eq "Unknown") {
+            throw "Existing role assignment for $ffRoleName is invalid, aborting now."
+        }
         Write-Host "Role assignment for $ffRoleName already exist, skipping creation..."
         return
     }
@@ -200,10 +203,14 @@ function New-AppRoleAssignments {
         (
          @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*state'
         )
+        OR
+        (
+         @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*.tfstateenv:*'
+        )
        )"
     # Verify the role assignment creation
     $ra = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $ffRoleName
-    if (!$ra) {
+    if (!$ra -Or $ra.ObjectType -eq "Unknown") {
         throw "Failed to find created role assignment: $ffRoleName, aborting now."
     }
 
@@ -238,10 +245,10 @@ function New-FireflyCustomRole {
     New-AzRoleDefinition -Role $role
 
     # Verify the role definition creation
-    Read-FireflyCustomRoleIsExist -ffRoleName $ffRoleName
+    Read-FireflyCustomRoleExists -ffRoleName $ffRoleName
 }
 
-function Read-FireflyCustomRoleIsExist{
+function Read-FireflyCustomRoleExists{
     param (
         [string][ValidateNotNullOrEmpty()]$ffRoleName
     )
@@ -263,7 +270,7 @@ function Read-FireflyCustomRoleIsExist{
             $retryCount++
 
             if ($retryCount -eq $maxRetries) {
-                throw "Role definition $ffRoleName is not exist yet, aborting now. Please contact firefly support"
+                throw "Role definition $ffRoleName does not exist yet, aborting now. Please contact firefly support"
             }
 
             Start-Sleep -Seconds $retryInterval
@@ -298,7 +305,10 @@ function New-ResourceGroup {
     $existingResourceGroup = Get-AzResourceGroup -Name $name -ErrorAction SilentlyContinue
 
     if (-Not $existingResourceGroup) {
-        New-AzResourceGroup -Name $name -Location $location
+        $rg = New-AzResourceGroup -Name $name -Location $location
+        if (!$rg) {
+            throw "Failed creating $name resource group, aborting now."
+        }
         Write-Host "Done creating $name resource group..."
     }
     else {
@@ -321,7 +331,11 @@ function New-FireflyStorageAccount {
     $existingStorageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $name -ErrorAction SilentlyContinue
     if (-Not $existingStorageAccount) {
         # Create new storage account
-        New-AzStorageAccount -ResourceGroupName $resourceGroup -Name $name -Location $location -SkuName Standard_LRS
+        Register-AzResourceProvider -ProviderNamespace Microsoft.Storage
+        $sa = New-AzStorageAccount -ResourceGroupName $resourceGroup -Name $name -Location $location -SkuName Standard_LRS
+        if (!$sa) {
+            throw "Error creating $name storage account in $resourceGroup resource group, aborting now."
+        }
     } else {
         # Storage account already exists
         Write-Host "Storage account $name already exists, skipping creation..."
@@ -381,8 +395,12 @@ function New-StorageAccountRoleAssignments {
 
     $existing = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName "Storage Blob Data Reader" -Scope $id
     if ($existing) {
+        if ($existing.ObjectType -ne "Unknown") {
         Write-Host "Role assignment for Storage Blob Data Reader on $id already exist, skipping creation..."
         return
+        } else {
+            throw "Invalid role assignment for storage account, aborting now."
+        }
     }
 
     Write-Host "Start assigning Storage Blob Data Reader on $id to registration application..."
@@ -390,7 +408,7 @@ function New-StorageAccountRoleAssignments {
 
     # Verify success of Assign Blob Reader role to registration app
     $blobAssignmnet = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName "Storage Blob Data Reader" -Scope $id
-    if (!$blobAssignmnet) {
+    if (!$blobAssignmnet -Or $blobAssignment.ObjectType -eq "Unknown") {
         throw "Failed to find created role assignment: Storage Blob Data Reader, aborting now."
     }
     Write-Host "Done assigning role Storage Blob Data Reader..."
@@ -414,7 +432,10 @@ function CreateEventGridSubscription {
 
     # Register and get Event Grid resource provider
     Register-AzResourceProvider -ProviderNamespace Microsoft.EventGrid
-    Get-AzResourceProvider -ProviderNamespace Microsoft.EventGrid
+    $rp = Get-AzResourceProvider -ProviderNamespace Microsoft.EventGrid
+    if (!$rp) {
+        throw "Failed getting Event Grid resource provider, aborting now."
+    }
 
     # Create new Event Grid subscription
     New-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -Endpoint $endpoint -ResourceId $id  -IncludedEventType 'Microsoft.Storage.BlobCreated'
@@ -435,6 +456,7 @@ function CreateDiagnosticSettings {
     $diagnosticSettingsName = 'firefly'
     $id = $storageId.Trim()
 
+    Register-AzResourceProvider -ProviderNamespace Microsoft.Insights
     $existing = Get-AzSubscriptionDiagnosticSetting -Name $diagnosticSettingsName -ErrorAction SilentlyContinue
     if ($existing) {
         Write-Host "Diagnostic settings $diagnosticSettingsName already exist, skipping creation..."
@@ -523,8 +545,8 @@ try {
     $appId = $sp.AppId
     $spId = $sp.Id
 
-    $enableAcitveDirectory = Set-ADAppPermsissionParameter -enableAcitveDirectory $enableAcitveDirectory
-    if ($enableAcitveDirectory) {
+    $enableActiveDirectory = Set-ADAppPermsissionParameter -enableActiveDirectory $enableActiveDirectory
+    if ($enableActiveDirectory) {
         Add-AppPermissions -app $appName
     }
 
