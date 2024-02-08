@@ -203,6 +203,10 @@ function New-AppRoleAssignments {
         (
          @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*state'
         )
+        OR
+        (
+         @Resource[Microsoft.Storage/storageAccounts/blobServices/containers/blobs:path] StringLike '*.tfstateenv:*'
+        )
        )"
     # Verify the role assignment creation
     $ra = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $ffRoleName
@@ -452,6 +456,7 @@ function CreateDiagnosticSettings {
     $diagnosticSettingsName = 'firefly'
     $id = $storageId.Trim()
 
+    Register-AzResourceProvider -ProviderNamespace Microsoft.Insights
     $existing = Get-AzSubscriptionDiagnosticSetting -Name $diagnosticSettingsName -ErrorAction SilentlyContinue
     if ($existing) {
         Write-Host "Diagnostic settings $diagnosticSettingsName already exist, skipping creation..."
