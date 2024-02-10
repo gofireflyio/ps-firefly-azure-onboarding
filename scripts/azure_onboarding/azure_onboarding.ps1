@@ -496,6 +496,11 @@ function New-EventDrivenResources {
 
     $storageId = New-FireflyStorageAccount -subscriptionId $subscriptionId -resourceGroup $resourceGroup -location $location
 
+    if ($storageId.Contains(" ")) {
+        $tmp = $storageId.Split(" ")
+        $storageId = $tmp[-1]
+    }
+
     New-StorageAccountRoleAssignments -spId $spId -storageId $storageId -subscriptionId $subscriptionId -resourceGroup $resourceGroup
 
     CreateEventGridSubscription -endpoint $endpoint -storageId $storageId
