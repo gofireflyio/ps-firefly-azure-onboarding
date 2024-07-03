@@ -417,18 +417,13 @@ function New-StorageAccountRoleAssignments {
 function CreateEventGridSubscription {
     param (
         [string][ValidateNotNullOrEmpty()]$endpoint,
-        [string][ValidateNotNullOrEmpty()]$storageId
+        [string][ValidateNotNullOrEmpty()]$storageId,
+        [string][ValidateNotNullOrEmpty()]$resourceGroupName
     )
     $eventSubscriptionName = 'fireflyevents'
     $id = $storageId.Trim()
 
-    $existing = Get-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -ResourceId $id -ErrorAction SilentlyContinue
-    if ($existing) {
-        Write-Host "Eventgrid subscription $eventSubscriptionName already exist, skipping creation..."
-        return
-    }
-
-    Write-Host "Start event grid setup..."
+    Write-Host "Starting event grid setup..."
 
     # Register and get Event Grid resource provider
     Register-AzResourceProvider -ProviderNamespace Microsoft.EventGrid
@@ -437,16 +432,66 @@ function CreateEventGridSubscription {
         throw "Failed getting Event Grid resource provider, aborting now."
     }
 
-    # Create new Event Grid subscription
-    New-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -Endpoint $endpoint -ResourceId $id  -IncludedEventType 'Microsoft.Storage.BlobCreated'
+    $azModuleVersion = (Get-InstalledModule -Name Az -AllVersions).Version
 
-    # Verify success creation of the Event Grid subscription
-    $eventSubscription = Get-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -ResourceId $id
-    if (!$eventSubscription) {
-        throw "Failed to find created eventgrid subscription on storage: $id."
+    if ($azModuleVersion.StartsWith("11.")) {
+        $existing = Get-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -ResourceId $id -ErrorAction SilentlyContinue
+        if ($existing) {
+            Write-Host "Eventgrid subscription $eventSubscriptionName already exist, skipping creation..."
+            return
+        }
+    
+        # Create new Event Grid subscription
+        New-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -Endpoint $endpoint -ResourceId $id  -IncludedEventType 'Microsoft.Storage.BlobCreated'
+    
+        # Verify success creation of the Event Grid subscription
+        $eventSubscription = Get-AzEventGridSubscription -EventSubscriptionName $eventSubscriptionName -ResourceId $id
+        if (!$eventSubscription) {
+            throw "Failed to find created eventgrid subscription on storage: $id."
+        }    
+    } else {
+        $storageIdSplit = $id.Split("/")
+        $storageAccName = $storageIdSplit[$storageIdSplit.Length-1]
+    
+        $existingTopics = Get-AzEventGridSystemTopic -ResourceGroupName $resourceGroupName -ErrorAction SilentlyContinue
+        $topicName = ""
+        foreach ($topic in $existingTopics) {
+            if ($topic.Name.StartsWith($storageAccName)) {
+                $topicName = $topic.Name
+                break
+            }
+        }
+    
+        if (!$topicName) {
+            $guid = New-Guid
+            $guid = $guid.ToString()
+            $topicName = $storageAccName+"-"+$guid
+            $topic = New-AzEventGridSystemTopic -Name $topicName -ResourceGroupName $resourceGroupName -Location eastus -Source $id -TopicType "microsoft.storage.storageaccounts"
+            if (!$topic) {
+                throw "Failed creating new event grid System Topic, aborting now."
+            } 
+        } else {
+            Write-Host "Event grid topic $topicName already exists, skipping creation"
+        }
+    
+        $subscription = Get-AzEventGridSystemTopicEventSubscription -EventSubscriptionName $eventSubscriptionName -ResourceGroupName $resourceGroupName -SystemTopicName $topicName -ErrorAction SilentlyContinue
+        if ($subscription) {
+            Write-Host "Event grid subscription $eventSubscriptionName already exist, skipping creation"
+            return
+        }
+    
+        $destinationObj = New-AzEventGridWebHookEventSubscriptionDestinationObject -EndpointUrl $endpoint
+        # Create new Event Grid subscription
+        New-AzEventGridSystemTopicEventSubscription -EventSubscriptionName $eventSubscriptionName -ResourceGroupName $resourceGroupName -SystemTopicName $topicName -FilterIncludedEventType "Microsoft.Storage.BlobCreated" -Destination $destinationObj
+    
+        # Verify success creation of the Event Grid subscription
+        $subscription = Get-AzEventGridSystemTopicEventSubscription -EventSubscriptionName $eventSubscriptionName -ResourceGroupName $resourceGroupName -SystemTopicName $topicName
+        if (!$subscription) {
+            throw "Failed to find created eventgrid subscription on storage $id, aborting now."
+        }
     }
 
-    Write-Host "Done event grid setup.."
+    Write-Host "Done event grid setup"
 }
 
 function CreateDiagnosticSettings {
@@ -503,7 +548,7 @@ function New-EventDrivenResources {
 
     New-StorageAccountRoleAssignments -spId $spId -storageId $storageId -subscriptionId $subscriptionId -resourceGroup $resourceGroup
 
-    CreateEventGridSubscription -endpoint $endpoint -storageId $storageId
+    CreateEventGridSubscription -endpoint $endpoint -storageId $storageId -resourceGroupName $resourceGroup
 
     CreateDiagnosticSettings -storageId $storageId
 
