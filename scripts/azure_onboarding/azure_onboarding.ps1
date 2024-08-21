@@ -240,6 +240,7 @@ function New-FireflyCustomRole {
                     "Microsoft.ContainerService/managedClusters/listClusterUserCredential/action",
                     "Microsoft.Web/sites/config/list/Action",
                     "Microsoft.Cache/redis/listKeys/action"
+                    "Microsoft.AppConfiguration/configurationStores/ListKeys/action"
     $role.DataActions = "Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read"
     $role.AssignableScopes = '/subscriptions/'+$subscriptionId
     New-AzRoleDefinition -Role $role
