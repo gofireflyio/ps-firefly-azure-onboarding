@@ -33,18 +33,13 @@ function Remove-DiagnosticSetting {
         return
     }
     if ($diagnosticSetting -is [array]) {
-        $err = $false
         Write-Host "Diagnostic settings found, removing..."
         foreach ($ds in $diagnosticSetting) {
             try {
                 Remove-AzSubscriptionDiagnosticSetting -InputObject $ds
             } catch {
-                $err = $true
-                Write-Host "Failed to remove diagnostic setting, error: $_" -ForegroundColor Red
+                throw "Failed to remove diagnostic setting, error: $_"
             }
-        }
-        if ($err) {
-            return
         }
     } else {
         Write-Host "Diagnostic setting found, removing..."
@@ -98,44 +93,24 @@ function Remove-RoleAssignment {
     param(
         [string][ValidateNotNullOrEmpty()]$spId,
         [string][ValidateNotNullOrEmpty()]$roleName,
-        [string]$scope
+        [string][ValidateNotNullOrEmpty()]$scope
     )
     Write-Host "Checking if Role Assignment exists..."
-    if ($scope) {
-        Write-Host "Role assignment with scope: $scope"
-        $scope = $scope.Trim()
-        $roleAssignment = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $roleName -Scope $scope
-        if ($roleAssignment -eq $null) {
-            Write-Host "Role assignment $roleName does not exist, skipping deletion..."
+    $scope = $scope.Trim()
+    $roleAssignment = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $roleName -Scope $scope
+    if ($roleAssignment -eq $null) {
+        Write-Host "Role assignment $roleName does not exist, skipping deletion..."
+        return
+    }
+    Write-Host "Role assignment found, removing..."
+    try {
+        $assignment = Remove-AzRoleAssignment -ObjectID $spId -RoleDefinitionName $roleName -Scope $scope
+        if ($assignment -And $assignment.ObjectType -eq "Unknown") {
+            Write-Host "Unable to remove $roleName role assignment. Continuing..." -ForegroundColor Red
             return
         }
-        try {
-            Write-Host "Role assignment found, removing..."
-            $assignment = Remove-AzRoleAssignment -ObjectID $spId -RoleDefinitionName $roleName -Scope $scope
-            if ($assignment -And $assignment.ObjectType -eq "Unknown") {
-                Write-Host "Unable to remove $roleName role assignment. Continuing..." -ForegroundColor Red
-                return
-            }
-        } catch {
-            throw "Failed to remove role assignment, error: $_"
-        }
-    } else {
-        Write-Host "Role assignment with $spId and $roleName"
-        $roleAssignment = Get-AzRoleAssignment -ObjectId $spId -RoleDefinitionName $roleName
-        if ($roleAssignment -eq $null) {
-            Write-Host "Role assignment $roleName does not exist, skipping deletion..."
-            return
-        }
-        try {
-            Write-Host "Role assignment found, removing..."
-            $assignment = Remove-AzRoleAssignment -ObjectID $spId -RoleDefinitionName $roleName
-            if ($assignment -And $assignment.ObjectType -eq "Unknown") {
-                Write-Host "Unable to remove $roleName role assignment. Continuing..." -ForegroundColor Red
-                return
-            }
-        } catch {
-            throw "Failed to remove role assignment, error: $_"
-        }
+    } catch {
+        throw "Failed to remove role assignment, error: $_"
     }
     Write-Host "Role assignment successfully removed"
 }
@@ -149,16 +124,56 @@ function Remove-StorageAccount {
     Write-Host "Checking if Storage Account exists..."
     $storageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $storageAccountName -ErrorAction SilentlyContinue
     if ($storageAccount -eq $null) {
-        Write-Host "Storage Account $storageAccountName does not exist, skipping deletion..."
+        Write-Host "Storage Account $storageAccountName does not exist, skipping deletion"
         return
     }
 
-    Write-Host "Trying to remove EventGridSubscription..."
-    try {
-        Remove-EventGridSubscription -name "fireflyevents" -id $storageAccount.Id
-    } catch {
-        Write-Host "$_" -ForegroundColor Red
-        Write-Host "Continuing..."
+    $azModuleVersion = (Get-InstalledModule -Name Az -AllVersions).Version
+    if ($azModuleVersion.StartsWith("11.")) {
+        Write-Host "Trying to remove EventGrid Subscription..."
+        try {
+            Remove-EventGridSubscription -name "fireflyevents" -id $storageAccount.Id
+        } catch {
+            throw "Failed to remove EventGrid Subscription, error: $_"
+        }
+        Write-Host "EventGrid Subscription successfully removed"
+    } else {
+        $storageAccName = $storageAccount.StorageAccountName
+    
+        $existingTopics = Get-AzEventGridSystemTopic -ResourceGroupName $resourceGroup -ErrorAction SilentlyContinue
+        $topicName = ""
+        Write-Host "Trying to remove EventGridSystemTopic..."
+        foreach ($topic in $existingTopics) {
+            if ($topic.Name.StartsWith($storageAccName)) {
+                $topicName = $topic.Name
+                break
+            }
+        }
+        try {
+            Remove-AzEventGridSystemTopicEventSubscription -EventSubscriptionName "firefly-events" -ResourceGroupName "firefly" -SystemTopicName $topicName
+        } catch {
+            throw "Failed to remove topic event subscription from $topicName topic, error: $_"
+        }
+        Write-Host "Topic Event Subscription successfully removed"
+
+        try {
+            Remove-AzEventGridSystemTopic -Name $topicName -ResourceGroupName "firefly"
+        } catch {
+            throw "Failed to remove topic $topicName, error: $_"
+        }
+        Write-Host "Topic successfully removed"
+    }
+
+    Write-Host "Checking if storage account has lock..."
+    $lock = Get-AzResourceLock -ResourceGroupName $resourceGroup -ResourceType "microsoft.storage/storageAccounts" -ResourceName $storageAccountName
+    if ($lock) {
+        Write-Host "Lock found, attempting removal..."
+        try{
+            Remove-AzResourceLock -LockName $lock.Name -ResourceGroupName $resourceGroup -ResourceType "microsoft.storage/storageAccounts" -ResourceName $storageAccountName -Force
+        } catch {
+            throw "Failed to remove storate lock, error: $_"
+        }
+        Write-Host "Lock successfully removed"
     }
 
     Write-Host "Trying to remove Storage Account Role Assignment..."
@@ -166,8 +181,9 @@ function Remove-StorageAccount {
     try {
         Remove-RoleAssignment -spId $spId -roleName $roleName -scope $storageAccount.Id.Trim()
     } catch {
-        Write-Host "Failed to remove Role Assignment, continuing..." -ForegroundColor Red
+       throw "Failed to remove Role Assignment, error: $_"
     }
+    Write-Host "Role Assignment successfully removed"
 
         
     Write-Host "Removing Storage Account..."
@@ -176,7 +192,7 @@ function Remove-StorageAccount {
     } catch {
         throw "Failed to remove Storage Account, error: $_"
     }
-    Write-Host "Storage account successfully removed"
+    Write-Host "Storage account and dependencies successfully removed"
 }
 
 function Remove-ResourceGroup {
@@ -209,7 +225,7 @@ $sp = Get-AzADServicePrincipal -DisplayName $appName
 if (!$sp) {
     Write-Host "Service Principal not found. Aborting..."
     return
-} 
+}
 
 $storageAccountName = ("firefly" + $subscriptionId -replace '-', '').Substring(0,[Math]::Min(("firefly-" + $subscriptionId -replace '-', '').Length, 23))
 
@@ -225,4 +241,10 @@ try {
 } catch {
     Write-Host "$_" -ForegroundColor Red
     Write-Host "Continuing..."
+}
+
+try {
+    Remove-ResourceGroup -name "firefly"
+} catch {
+    Write-Host "$_" -ForegroundColor Red
 }
