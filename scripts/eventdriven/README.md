@@ -1,4 +1,4 @@
-# ps-firefly-azure-onboarding
+# Firefly Azure Onboarding
 Powershell script for eventdriven completion
 
 Execute the following command in the Azure Cloud Shell to onboard the Azure subscription to the Firefly platform
