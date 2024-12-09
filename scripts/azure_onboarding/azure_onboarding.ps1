@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$FormatEnumerationLimit = -1
 
 function Set-AzureContext {
     param (
@@ -348,7 +349,7 @@ function New-FireflyStorageAccount {
     # Verify the storage account creation
     Read-FireflyStorageAccountIsReady -resourceGroup $resourceGroup -storageName $name
 
-    $storageAccountId = (Get-AzStorageAccount -ResourceGroupName $resourceGroup -AccountName $name).Id
+    $storageAccountId = (Get-AzStorageAccount -ResourceGroupName $resourceGroup -AccountName $name).Id | Out-String
 
     Write-Host "Done creating $name storage account..."
 
