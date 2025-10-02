@@ -111,14 +111,14 @@ function Remove-StorageAccount {
             }
         }
         try {
-            Remove-AzEventGridSystemTopicEventSubscription -EventSubscriptionName "firefly-events" -ResourceGroupName "firefly" -SystemTopicName $topicName
+            Remove-AzEventGridSystemTopicEventSubscription -EventSubscriptionName "firefly-events" -ResourceGroupName $resourceGroup -SystemTopicName $topicName
         } catch {
             throw "Failed to remove topic event subscription from $topicName topic, error: $_"
         }
         Write-Host "Topic Event Subscription successfully removed"
 
         try {
-            Remove-AzEventGridSystemTopic -Name $topicName -ResourceGroupName "firefly"
+            Remove-AzEventGridSystemTopic -Name $topicName -ResourceGroupName $resourceGroup
         } catch {
             throw "Failed to remove topic $topicName, error: $_"
         }
@@ -171,7 +171,7 @@ Connect-AzureAD
 
 if ([string]::IsNullOrEmpty($subscriptionId)) {
   Write-Host '$subscriptionId variable is empty. Aborting.' -ForegroundColor Red
-  exit 1
+  return
 }
 
 $context = Set-AzureContext -subscriptionId $subscriptionId
@@ -183,7 +183,8 @@ try {
     Write-Host "Continuing..."
 }
 
-$storageAccountName = ("firefly" + $subscriptionId -replace '-', '').Substring(0,[Math]::Min(("firefly-" + $subscriptionId -replace '-', '').Length, 23))
+$storageAccountName = ("firefly" + $subscriptionId -replace '-', '')
+$storageAccountName = $storageAccountName.Substring(0, 23)
 
 try {
     Remove-StorageAccount -resourceGroup "firefly" -storageAccountName $storageAccountName
