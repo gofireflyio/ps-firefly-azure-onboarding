@@ -23,7 +23,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.CI_PROD_CRED_SECRET }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Upload AWS Fetching Template
-        uses: jakejarvis/s3-sync-action@master
+        uses: jakejarvis/s3-sync-action@7ed8b112447abb09f1da74f3466e4194fc7a6311 # master
         with:
           args: --acl public-read --follow-symlinks --exclude='*' --include='azure_onboarding.ps1'
         env:
